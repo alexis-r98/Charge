@@ -3,7 +3,7 @@
  * Stratégie « réseau d'abord » : en ligne on a toujours la dernière version,
  * hors ligne on sert la copie en cache. Incrémenter VERSION à chaque livraison.
  */
-const VERSION = 'charge-v4';
+const VERSION = 'charge-v5';
 const ASSETS = [
   './',
   'index.html',
@@ -19,6 +19,7 @@ const ASSETS = [
   'js/figures.js',
   'js/calc.js',
   'js/progress.js',
+  'js/native.js',
   'manifest.webmanifest',
   'icon.svg',
   'icon-192.png',

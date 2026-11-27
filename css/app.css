@@ -46,7 +46,8 @@
   --font: 'Barlow', system-ui, sans-serif;
   --cond: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --tabbar-h: 64px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   color-scheme: dark;
 }
 
@@ -107,7 +108,7 @@ h1, h2, h3 { margin: 0; font-family: var(--cond); font-weight: 700; line-height:
 .small { font-size: .875rem; }
 
 /* ── Barre du haut ── */
-.topbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
+.topbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); padding-top: var(--safe-t); }
 .topbar-in { max-width: 1120px; margin: 0 auto; padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
 .wordmark { font: 800 1.45rem/1 var(--cond); letter-spacing: .12em; text-decoration: none; display: flex; align-items: center; gap: 10px; }
 .wordmark::before { content: ''; width: 18px; height: 18px; border-radius: 50%; border: 5px solid var(--plate); }

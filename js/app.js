@@ -13,6 +13,7 @@ import {
   BARBELL, platesPerSide, warmupSets, e1rm,
 } from './calc.js';
 import { progressSeries, drawProgress, METRIC_LABEL } from './progress.js';
+import { isNative, nativeNotif, nativeAwake, nativeTheme } from './native.js';
 
 /* ═════════════ Utilitaires ═════════════ */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1023,7 +1024,9 @@ function tickRest() {
 
 /* ═════════════ Notification de fin de repos (écran verrouillé) ═════════════ */
 let restNotifTimer = null;
-const notifOn = () => S().settings.restNotif && 'Notification' in window && Notification.permission === 'granted';
+// Dans l'APK : notification Android programmée (activée par défaut). Sur le web : API Notification.
+const notifOn = () => (isNative ? S().settings.restNotif !== false
+  : S().settings.restNotif && 'Notification' in window && Notification.permission === 'granted');
 
 async function toggleRestNotif(input) {
   const off = (msg) => {
@@ -1032,6 +1035,11 @@ async function toggleRestNotif(input) {
     if (msg) toast(msg);
   };
   if (!input.checked) return off();
+  if (isNative) {
+    if (!(await nativeNotif.ensurePermission())) return off('Autorise les notifications de Charge dans les réglages Android');
+    store.update((s) => (s.settings.restNotif = true), { silent: true });
+    return toast('Notification de fin de repos activée');
+  }
   if (!('Notification' in window)) return off('Notifications non disponibles sur ce navigateur');
   if (!window.isSecureContext) return off('Les notifications demandent l’app en HTTPS');
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
@@ -1049,6 +1057,7 @@ async function notify(title, opts = {}) {
 }
 async function clearRestNotif() {
   clearTimeout(restNotifTimer);
+  if (isNative) return nativeNotif.cancelRest();
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     (await reg?.getNotifications({ tag: 'rest' }))?.forEach((n) => n.close());
@@ -1058,6 +1067,10 @@ function scheduleRestNotif() {
   clearTimeout(restNotifTimer);
   const rest = S().activeSession?.rest;
   if (!rest || !notifOn()) return;
+  if (isNative) { // programmée par Android si l'app passe en arrière-plan pendant le repos
+    if (document.visibilityState === 'hidden') nativeNotif.scheduleRest(rest.endsAt, `C’est reparti : ${rest.label || 'série suivante'}`);
+    return;
+  }
   restNotifTimer = setTimeout(() => {
     if (document.visibilityState === 'hidden') {
       notify('Repos terminé', { body: `C’est reparti : ${rest.label || 'série suivante'}`, renotify: true, vibrate: [250, 120, 250] });
@@ -1067,6 +1080,10 @@ function scheduleRestNotif() {
 document.addEventListener('visibilitychange', () => {
   const rest = S().activeSession?.rest;
   if (!notifOn() || !rest) return;
+  if (isNative) {
+    if (document.visibilityState === 'hidden') scheduleRestNotif(); else clearRestNotif();
+    return;
+  }
   if (document.visibilityState === 'hidden' && rest.endsAt > Date.now()) {
     const at = new Date(rest.endsAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     notify('Repos en cours', { body: `Reprise à ${at} · ${rest.label || ''}`, silent: true });
@@ -1079,6 +1096,7 @@ document.addEventListener('visibilitychange', () => {
 /* ═════════════ Écran allumé pendant la séance ═════════════ */
 let wakeLock = null;
 async function keepAwake(on) {
+  if (isNative) return nativeAwake.set(on);
   try {
     if (on && !wakeLock && 'wakeLock' in navigator && document.visibilityState === 'visible') {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -1186,7 +1204,7 @@ function renderJournal() {
         <label class="switch"><span>Gros chiffres en séance</span>
           <input type="checkbox" id="set-big" ${st.settings.bigNumbers ? 'checked' : ''} style="width:26px;height:26px;accent-color:var(--plate)"></label>
         <label class="switch"><span>Notification de fin de repos<br><small class="muted">Utile écran verrouillé</small></span>
-          <input type="checkbox" id="set-notif" ${st.settings.restNotif ? 'checked' : ''} style="width:26px;height:26px;accent-color:var(--plate)"></label>
+          <input type="checkbox" id="set-notif" ${(isNative ? st.settings.restNotif !== false : st.settings.restNotif) ? 'checked' : ''} style="width:26px;height:26px;accent-color:var(--plate)"></label>
         <div class="field"><span>Thème</span>
           <div class="seg" role="group" aria-label="Thème">
             <button data-action="theme" data-v="dark" aria-pressed="${st.settings.theme !== 'light'}">Sombre</button>
@@ -1251,6 +1269,7 @@ window.addEventListener('hashchange', () => {
   lastRoute = route();
 });
 document.body.classList.toggle('big-num', !!S().settings.bigNumbers);
+if (isNative) nativeTheme(S().settings.theme);
 store.subscribe(() => {
   render();
   refreshSheet();
@@ -1370,6 +1389,11 @@ const actions = {
   /* sport */
   start: (el) => {
     unlockAudio();
+    // APK : demande l'autorisation de notifier une seule fois, au premier lancement de séance
+    if (isNative && S().settings.restNotif !== false && !S().settings.notifAsked) {
+      store.update((s) => (s.settings.notifAsked = true), { silent: true });
+      nativeNotif.ensurePermission();
+    }
     const st = S();
     const sess = generateSession(el.dataset.type, genOptions(st));
     store.update((s) => (s.activeSession = sess));
@@ -1528,6 +1552,7 @@ const actions = {
   theme: (el) => {
     document.documentElement.dataset.theme = el.dataset.v;
     $('meta[name="theme-color"]').content = el.dataset.v === 'light' ? '#efece5' : '#121211';
+    nativeTheme(el.dataset.v);
     store.update((s) => (s.settings.theme = el.dataset.v));
   },
   export: () => {
@@ -1656,7 +1681,7 @@ setInterval(() => {
 
 /* ═════════════ Hors ligne ═════════════ */
 // Le service worker exige HTTPS (ou localhost). ?nosw désactive pour le debug.
-if ('serviceWorker' in navigator && window.isSecureContext && !location.search.includes('nosw')) {
+if (!isNative && 'serviceWorker' in navigator && window.isSecureContext && !location.search.includes('nosw')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
