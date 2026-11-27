@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planche figurines</title>
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  body { padding: 16px; }
+  .sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .cell { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .cell p { margin: 4px 0 0; font: 600 .75rem/1.2 var(--font); color: var(--muted); }
+</style>
+</head>
+<body>
+<p class="muted small">Pose finale pleine, pose de départ en filigrane. Ajouter <code>?motion=on</code> pour l'animation.</p>
+<div class="sheet-grid" id="grid"></div>
+<script type="module">
+  import { EXERCISES } from '../js/data-exercises.js';
+  import { figureSVG, figureOf } from '../js/figures.js';
+  const seen = new Map();
+  const all = new URLSearchParams(location.search).has('all');
+  for (const ex of EXERCISES) {
+    const k = figureOf(ex).name;
+    if (!all && seen.has(k)) continue;
+    seen.set(k, ex);
+    document.getElementById('grid').insertAdjacentHTML('beforeend',
+      `<div class="cell">${figureSVG(ex)}<p>${k} · ${ex.n}</p></div>`);
+  }
+</script>
+</body>
+</html>
